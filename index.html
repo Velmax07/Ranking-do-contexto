@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Ranking do Contexto</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<style>
+  :root {
+    --cyan: #00f5ff;
+    --violet: #c044ff;
+    --bg: #06080f;
+    --card: rgba(255,255,255,0.05);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: #fff;
+    font-family: 'Rajdhani', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+    background-image:
+      linear-gradient(rgba(0,245,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,245,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  /* ===== HEADER ===== */
+  header {
+    text-align: center;
+    padding: 24px 16px 16px;
+    position: relative;
+  }
+  header h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(32px, 8vw, 52px);
+    letter-spacing: .1em;
+    background: linear-gradient(135deg, var(--cyan), var(--violet));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .live-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(255,0,0,0.15); border: 1px solid rgba(255,60,60,0.4);
+    color: #ff4444; padding: 4px 12px; border-radius: 999px;
+    font-size: 12px; font-weight: 700; letter-spacing: .1em;
+    margin-top: 6px;
+  }
+  .live-dot {
+    width: 7px; height: 7px; border-radius: 50%; background: #ff4444;
+    animation: blink 1s infinite;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  /* ===== RIVALRY BAR ===== */
+  .rivalry {
+    margin: 16px 12px;
+    background: var(--card);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 20px;
+    padding: 16px;
+  }
+  .rivalry-teams {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 12px;
+  }
+  .team {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    flex: 1;
+  }
+  .team-badge {
+    width: 60px; height: 60px; border-radius: 14px;
+    background: rgba(255,255,255,0.08) center/cover no-repeat;
+    border: 2px solid rgba(255,255,255,0.2);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Bebas Neue', sans-serif; font-size: 22px;
+  }
+  #teamBadgeA { border-color: rgba(0,245,255,0.5); box-shadow: 0 0 20px rgba(0,245,255,0.2); }
+  #teamBadgeB { border-color: rgba(192,68,255,0.5); box-shadow: 0 0 20px rgba(192,68,255,0.2); }
+  .team-name {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(16px, 4vw, 22px); letter-spacing: .05em;
+  }
+  #teamNameA { color: var(--cyan); }
+  #teamNameB { color: var(--violet); }
+  .team-wins {
+    font-size: clamp(28px, 7vw, 42px);
+    font-family: 'Bebas Neue', sans-serif; letter-spacing: .05em;
+  }
+  #winsA { color: var(--cyan); }
+  #winsB { color: var(--violet); }
+  .hearts { display: flex; gap: 3px; justify-content: center; }
+  .heart { font-size: 16px; transition: opacity .3s, filter .3s; }
+  .heart.empty { opacity: 0.18; filter: grayscale(1); }
+
+  .vs-badge {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px; color: rgba(255,255,255,0.3); letter-spacing: .1em;
+    padding: 0 8px;
+  }
+
+  /* Dominance bar */
+  .dom-bar-wrap { position: relative; margin-top: 4px; }
+  .dom-label {
+    text-align: center; font-size: 11px; color: rgba(255,255,255,0.4);
+    letter-spacing: .08em; margin-bottom: 6px; text-transform: uppercase;
+  }
+  .dom-bar {
+    height: 10px; border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+    overflow: hidden; position: relative;
+  }
+  .dom-fill-a {
+    position: absolute; left: 0; top: 0; height: 100%;
+    background: linear-gradient(90deg, var(--cyan), rgba(0,245,255,0.5));
+    border-radius: 999px; transition: width 1s ease;
+  }
+  .dom-fill-b {
+    position: absolute; right: 0; top: 0; height: 100%;
+    background: linear-gradient(270deg, var(--violet), rgba(192,68,255,0.5));
+    border-radius: 999px; transition: width 1s ease;
+  }
+
+  /* Rivalry message */
+  .rivalry-msg {
+    text-align: center; margin-top: 12px;
+    font-size: clamp(13px, 3.5vw, 16px); font-weight: 700;
+    letter-spacing: .05em; min-height: 22px;
+    animation: fadeMsg .5s ease;
+  }
+  @keyframes fadeMsg { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
+
+  /* ===== LAST WINNER ===== */
+  .last-winner {
+    margin: 0 12px 16px;
+    background: linear-gradient(135deg, rgba(0,245,255,0.07), rgba(192,68,255,0.07));
+    border: 1px solid rgba(255,215,0,0.3);
+    border-radius: 16px; padding: 12px 16px;
+    display: flex; align-items: center; gap: 12px;
+    animation: slideIn .4s ease;
+  }
+  @keyframes slideIn { from{opacity:0;transform:translateX(-10px)} to{opacity:1;transform:translateX(0)} }
+  .last-winner-icon { font-size: 28px; }
+  .last-winner-info { flex: 1; }
+  .last-winner-label { font-size: 10px; color: #ffd700; letter-spacing: .15em; text-transform: uppercase; font-weight: 700; }
+  .last-winner-name { font-size: clamp(16px,4vw,20px); font-weight: 700; color: #fff; }
+  .last-winner-group { font-size: 12px; color: rgba(255,255,255,0.5); }
+  #lastWinnerAvatar {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: rgba(255,255,255,0.1) center/cover no-repeat;
+    border: 2px solid #ffd700;
+    flex-shrink: 0;
+  }
+
+  /* ===== RANKING ===== */
+  .ranking-section { padding: 0 12px 20px; }
+  .ranking-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px; letter-spacing: .12em; color: rgba(255,255,255,0.5);
+    text-transform: uppercase; margin-bottom: 10px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .ranking-title::after {
+    content: ''; flex: 1; height: 1px;
+    background: linear-gradient(90deg, rgba(255,255,255,0.1), transparent);
+  }
+
+  .rank-item {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--card); border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 14px; padding: 10px 12px; margin-bottom: 8px;
+    transition: transform .2s, border-color .2s;
+    animation: rankIn .4s ease both;
+  }
+  .rank-item:nth-child(1) { border-color: rgba(255,215,0,0.3); background: rgba(255,215,0,0.05); }
+  .rank-item:nth-child(2) { border-color: rgba(192,192,192,0.3); background: rgba(192,192,192,0.04); }
+  .rank-item:nth-child(3) { border-color: rgba(205,127,50,0.3); background: rgba(205,127,50,0.04); }
+  .rank-item.group-a { border-left: 3px solid var(--cyan); }
+  .rank-item.group-b { border-left: 3px solid var(--violet); }
+
+  @keyframes rankIn {
+    from { opacity:0; transform:translateY(8px); }
+    to   { opacity:1; transform:translateY(0); }
+  }
+
+  .rank-pos {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px; min-width: 28px; text-align: center;
+    color: rgba(255,255,255,0.3);
+  }
+  .rank-item:nth-child(1) .rank-pos { color: #ffd700; }
+  .rank-item:nth-child(2) .rank-pos { color: #c0c0c0; }
+  .rank-item:nth-child(3) .rank-pos { color: #cd7f32; }
+
+  .rank-avatar {
+    width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+    background: rgba(255,255,255,0.1) center/cover no-repeat;
+    border: 2px solid rgba(255,255,255,0.15);
+  }
+  .rank-item.group-a .rank-avatar { border-color: rgba(0,245,255,0.4); }
+  .rank-item.group-b .rank-avatar { border-color: rgba(192,68,255,0.4); }
+
+  .rank-info { flex: 1; min-width: 0; }
+  .rank-name {
+    font-size: clamp(14px,3.5vw,17px); font-weight: 700;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .rank-group-tag {
+    font-size: 11px; font-weight: 600; letter-spacing: .08em;
+    margin-top: 1px;
+  }
+  .rank-item.group-a .rank-group-tag { color: var(--cyan); }
+  .rank-item.group-b .rank-group-tag { color: var(--violet); }
+
+  .rank-score {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(22px,5vw,28px); letter-spacing: .05em;
+    min-width: 40px; text-align: right;
+  }
+  .rank-item.group-a .rank-score { color: var(--cyan); }
+  .rank-item.group-b .rank-score { color: var(--violet); }
+  .rank-score-label { font-size: 9px; color: rgba(255,255,255,0.3); letter-spacing: .08em; text-align: right; }
+
+  .empty-state {
+    text-align: center; padding: 32px 16px;
+    color: rgba(255,255,255,0.2); font-size: 14px;
+  }
+  .empty-state .icon { font-size: 40px; margin-bottom: 8px; }
+
+  /* ===== FOOTER ===== */
+  footer {
+    text-align: center; padding: 16px;
+    font-size: 11px; color: rgba(255,255,255,0.15);
+    letter-spacing: .08em;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Ranking do Contexto</h1>
+  <div class="live-badge"><div class="live-dot"></div> AO VIVO</div>
+</header>
+
+<!-- RIVALRY -->
+<div class="rivalry">
+  <div class="rivalry-teams">
+    <div class="team">
+      <div class="team-badge" id="teamBadgeA">A</div>
+      <div class="team-name" id="teamNameA">Grupo A</div>
+      <div class="team-wins" id="winsA">0</div>
+      <div class="hearts" id="heartsA">
+        <span class="heart">❤️</span>
+        <span class="heart">❤️</span>
+        <span class="heart">❤️</span>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+      <div class="vs-badge">VS</div>
+      <div style="font-size:10px;color:rgba(255,255,255,0.2);letter-spacing:.08em">VITÓRIAS</div>
+    </div>
+
+    <div class="team">
+      <div class="team-badge" id="teamBadgeB">B</div>
+      <div class="team-name" id="teamNameB">Grupo B</div>
+      <div class="team-wins" id="winsB">0</div>
+      <div class="hearts" id="heartsB">
+        <span class="heart">❤️</span>
+        <span class="heart">❤️</span>
+        <span class="heart">❤️</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="dom-bar-wrap">
+    <div class="dom-label">Dominância</div>
+    <div class="dom-bar">
+      <div class="dom-fill-a" id="domA" style="width:50%"></div>
+      <div class="dom-fill-b" id="domB" style="width:50%"></div>
+    </div>
+  </div>
+
+  <div class="rivalry-msg" id="rivalryMsg">⚔️ A batalha está empatada!</div>
+</div>
+
+<!-- LAST WINNER -->
+<div class="last-winner" id="lastWinnerCard" style="display:none">
+  <div id="lastWinnerAvatar"></div>
+  <div class="last-winner-info">
+    <div class="last-winner-label">⚡ Último acerto</div>
+    <div class="last-winner-name" id="lastWinnerName">—</div>
+    <div class="last-winner-group" id="lastWinnerGroup">—</div>
+  </div>
+  <div class="last-winner-icon">🏆</div>
+</div>
+
+<!-- RANKING -->
+<div class="ranking-section">
+  <div class="ranking-title">🏅 Ranking</div>
+  <div id="rankingList">
+    <div class="empty-state">
+      <div class="icon">🎮</div>
+      Aguardando participantes...
+    </div>
+  </div>
+</div>
+
+<footer>RANKING DO CONTEXTO • ATUALIZAÇÃO EM TEMPO REAL</footer>
+
+<script>
+// ===== FIREBASE =====
+const firebaseConfig = {
+  apiKey: "AIzaSyAF4yj24_saWg-F52-ymkzdTakbPxV8al8",
+  authDomain: "game-d2947.firebaseapp.com",
+  databaseURL: "https://game-d2947-default-rtdb.firebaseio.com",
+  projectId: "game-d2947",
+  storageBucket: "game-d2947.firebasestorage.app",
+  messagingSenderId: "770400120649",
+  appId: "1:770400120649:web:169c86de3c01b92b753498"
+};
+firebase.initializeApp(firebaseConfig);
+firebase.auth().signInAnonymously().catch(e => console.log('auth err', e));
+const db = firebase.database();
+
+// ===== STATE =====
+const grupos = {
+  A: { nome:'Grupo A', imagemUrl:'', hearts:3, vitorias:0, membros:[] },
+  B: { nome:'Grupo B', imagemUrl:'', hearts:3, vitorias:0, membros:[] }
+};
+
+// ===== HELPERS =====
+function escHtml(s){ return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function renderHearts(side){
+  const h = grupos[side].hearts;
+  const container = document.getElementById('hearts'+side);
+  Array.from(container.children).forEach((el,i) => el.classList.toggle('empty', i >= h));
+}
+
+function updateDominanceBar(){
+  const wA = grupos.A.vitorias || 0;
+  const wB = grupos.B.vitorias || 0;
+  const total = wA + wB;
+  let pctA = 50, pctB = 50;
+  if(total > 0){ pctA = Math.round((wA/total)*100); pctB = 100-pctA; }
+  document.getElementById('domA').style.width = pctA+'%';
+  document.getElementById('domB').style.width = pctB+'%';
+
+  // Rivalry message
+  const msg = document.getElementById('rivalryMsg');
+  if(total === 0){
+    msg.textContent = '⚔️ A batalha está empatada!';
+    msg.style.color = 'rgba(255,255,255,0.5)';
+  } else if(pctA > pctB + 10){
+    msg.innerHTML = `🔥 <span style="color:var(--cyan)">${escHtml(grupos.A.nome)}</span> está dominando! Grupo B, acorda!`;
+  } else if(pctB > pctA + 10){
+    msg.innerHTML = `🔥 <span style="color:var(--violet)">${escHtml(grupos.B.nome)}</span> está na frente! Grupo A, reaja!`;
+  } else if(pctA > pctB){
+    msg.innerHTML = `⚡ <span style="color:var(--cyan)">${escHtml(grupos.A.nome)}</span> abre vantagem! Grupo B segura!`;
+  } else if(pctB > pctA){
+    msg.innerHTML = `⚡ <span style="color:var(--violet)">${escHtml(grupos.B.nome)}</span> abre vantagem! Grupo A segura!`;
+  } else {
+    msg.innerHTML = `🤝 Totalmente empatado! Quem vai virar?`;
+    msg.style.color = 'rgba(255,255,255,0.5)';
+  }
+}
+
+function renderGroup(side){
+  const g = grupos[side];
+  document.getElementById('teamName'+side).textContent = g.nome || 'Grupo '+side;
+  document.getElementById('wins'+side).textContent = g.vitorias || 0;
+  const badge = document.getElementById('teamBadge'+side);
+  if(g.imagemUrl){ badge.style.backgroundImage = `url("${g.imagemUrl}")`; badge.textContent=''; }
+  else { badge.style.backgroundImage='none'; badge.textContent=side; }
+  renderHearts(side);
+  updateDominanceBar();
+}
+
+// ===== RANKING =====
+let rankingData = {};
+
+function renderRanking(){
+  const list = document.getElementById('rankingList');
+  const entries = Object.values(rankingData).sort((a,b)=>(b.acertos||0)-(a.acertos||0));
+
+  if(entries.length === 0){
+    list.innerHTML = '<div class="empty-state"><div class="icon">🎮</div>Aguardando participantes...</div>';
+    return;
+  }
+
+  list.innerHTML = entries.slice(0,20).map((p,i) => {
+    const gClass = p.grupo==='A' ? 'group-a' : 'group-b';
+    const gNome  = grupos[p.grupo]?.nome || 'Grupo '+p.grupo;
+    const medals = ['🥇','🥈','🥉'];
+    const pos = medals[i] || (i+1);
+    const avatar = p.avatar ? `style="background-image:url('${escHtml(p.avatar)}')"` : '';
+    return `<div class="rank-item ${gClass}" style="animation-delay:${i*0.05}s">
+      <div class="rank-pos">${pos}</div>
+      <div class="rank-avatar" ${avatar}></div>
+      <div class="rank-info">
+        <div class="rank-name">${escHtml(p.nome||'Jogador')}</div>
+        <div class="rank-group-tag">${escHtml(gNome)}</div>
+      </div>
+      <div>
+        <div class="rank-score">${p.acertos||0}</div>
+        <div class="rank-score-label">acertos</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function updateLastWinner(data){
+  if(!data || !data.nome) return;
+  const card = document.getElementById('lastWinnerCard');
+  document.getElementById('lastWinnerName').textContent = data.nome;
+  const g = grupos[data.grupo]?.nome || 'Grupo '+data.grupo;
+  document.getElementById('lastWinnerGroup').textContent = g + ' • ' + (data.palavra||'');
+  const av = document.getElementById('lastWinnerAvatar');
+  av.style.backgroundImage = data.avatar ? `url("${data.avatar}")` : 'none';
+  card.style.display = 'flex';
+  card.style.animation = 'none';
+  setTimeout(()=>card.style.animation='slideIn .4s ease',10);
+}
+
+// ===== FIREBASE LISTENERS =====
+['A','B'].forEach(side => {
+  db.ref(`/grupos/${side}/config`).on('value', snap => {
+    const v = snap.val()||{};
+    if(v.nome) grupos[side].nome = v.nome;
+    if(v.imagemDataUrl||v.imagemUrl) grupos[side].imagemUrl = v.imagemDataUrl||v.imagemUrl;
+    if(typeof v.vitorias==='number') grupos[side].vitorias = v.vitorias;
+    if(typeof v.hearts==='number') grupos[side].hearts = v.hearts;
+    renderGroup(side);
+  });
+});
+
+db.ref('/ranking').on('value', snap => {
+  rankingData = snap.val()||{};
+  renderRanking();
+});
+
+db.ref('/ultimoAcerto').on('value', snap => {
+  const v = snap.val();
+  if(v) updateLastWinner(v);
+});
+
+// Initial render
+renderGroup('A');
+renderGroup('B');
+</script>
+</body>
+</html>
